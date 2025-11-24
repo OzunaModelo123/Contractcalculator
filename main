@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Position Size Calculator</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons (Vanilla Version - More stable for single file) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0;
+        }
+        .input-group {
+            transition: all 0.2s;
+        }
+        .input-group:focus-within {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Instrument Data: Point Value is the dollar amount per 1.00 movement
+        const INSTRUMENTS = [
+            { symbol: "ES", name: "E-mini S&P 500", pointValue: 50, tickSize: 0.25 },
+            { symbol: "NQ", name: "E-mini Nasdaq 100", pointValue: 20, tickSize: 0.25 },
+            { symbol: "YM", name: "E-mini Dow", pointValue: 5, tickSize: 1.00 },
+            { symbol: "RTY", name: "E-mini Russell 2000", pointValue: 50, tickSize: 0.10 },
+            { symbol: "CL", name: "Crude Oil", pointValue: 1000, tickSize: 0.01 },
+            { symbol: "GC", name: "Gold", pointValue: 100, tickSize: 0.10 },
+            { symbol: "MES", name: "Micro S&P 500", pointValue: 5, tickSize: 0.25 },
+            { symbol: "MNQ", name: "Micro Nasdaq 100", pointValue: 2, tickSize: 0.25 },
+            { symbol: "MCL", name: "Micro Crude Oil", pointValue: 100, tickSize: 0.01 },
+            { symbol: "MGC", name: "Micro Gold", pointValue: 10, tickSize: 0.10 },
+            { symbol: "ZB", name: "30-Year Bond", pointValue: 1000, tickSize: 0.03125 }, 
+            { symbol: "6E", name: "Euro FX", pointValue: 125000, tickSize: 0.00005 }, 
+        ];
+
+        const App = () => {
+            // State
+            const [instrument, setInstrument] = useState(INSTRUMENTS[0]);
+            const [riskAmount, setRiskAmount] = useState(250);
+            const [slPoints, setSlPoints] = useState(10);
+            const [tpPoints, setTpPoints] = useState(20);
+            const [accountCount, setAccountCount] = useState(1);
+            const [riskMode, setRiskMode] = useState('per_account'); // 'per_account' or 'total'
+
+            // Calculated Values
+            const [lossPerContract, setLossPerContract] = useState(0);
+            const [gainPerContract, setGainPerContract] = useState(0);
+            const [contractsPerAccount, setContractsPerAccount] = useState(0);
+            const [totalContracts, setTotalContracts] = useState(0);
+            const [totalRisk, setTotalRisk] = useState(0);
+            const [totalGain, setTotalGain] = useState(0);
+
+            // Effect to calculate values
+            useEffect(() => {
+                // 1. Calculate Risk/Reward per single contract based on Points
+                const lossPerCon = slPoints * instrument.pointValue;
+                const gainPerCon = tpPoints * instrument.pointValue;
+
+                setLossPerContract(lossPerCon);
+                setGainPerContract(gainPerCon);
+
+                // 2. Calculate Max Contracts based on Risk Allowance
+                let calculatedContractsPerAccount = 0;
+
+                if (lossPerCon > 0) {
+                    if (riskMode === 'per_account') {
+                        // User is willing to lose $X per account
+                        calculatedContractsPerAccount = Math.floor(riskAmount / lossPerCon);
+                    } else {
+                        // User is willing to lose $X TOTAL across all accounts
+                        const riskPerAccount = riskAmount / accountCount;
+                        calculatedContractsPerAccount = Math.floor(riskPerAccount / lossPerCon);
+                    }
+                }
+
+                setContractsPerAccount(calculatedContractsPerAccount);
+
+                // 3. Group Totals
+                const totalCons = calculatedContractsPerAccount * accountCount;
+                setTotalContracts(totalCons);
+                setTotalRisk(totalCons * lossPerCon);
+                setTotalGain(totalCons * gainPerCon);
+
+            }, [instrument, riskAmount, slPoints, tpPoints, accountCount, riskMode]);
+
+            // Effect to refresh icons on every render
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            });
+
+            return (
+                <div className="min-h-screen bg-slate-900 text-slate-200 p-4 md:p-8 font-sans">
+                    <div className="max-w-4xl mx-auto space-y-8">
+                        
+                        {/* Header */}
+                        <div className="flex items-center space-x-3 border-b border-slate-700 pb-6">
+                            <div className="p-3 bg-blue-600 rounded-lg shadow-lg shadow-blue-500/20">
+                                <i data-lucide="calculator" className="w-8 h-8 text-white"></i>
+                            </div>
+                            <div>
+                                <h1 className="text-2xl md:text-3xl font-bold text-white">Position Size Calculator</h1>
+                                <p className="text-slate-400">Optimize your Tradovate group entries</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            
+                            {/* INPUT SECTION */}
+                            <div className="lg:col-span-1 space-y-6 bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+                                <h2 className="text-xl font-semibold text-white flex items-center mb-4">
+                                    <i data-lucide="bar-chart-3" className="w-5 h-5 mr-2 text-blue-400"></i>
+                                    Trade Parameters
+                                </h2>
+
+                                {/* Instrument Selection */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-400">Instrument</label>
+                                    <select 
+                                        className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                        value={instrument.symbol}
+                                        onChange={(e) => setInstrument(INSTRUMENTS.find(i => i.symbol === e.target.value))}
+                                    >
+                                        {INSTRUMENTS.map(inst => (
+                                            <option key={inst.symbol} value={inst.symbol}>
+                                                {inst.symbol} - {inst.name} (${inst.pointValue}/pt)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Risk Input */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-400 flex justify-between">
+                                        <span>Max Risk ($)</span>
+                                        <button 
+                                            onClick={() => setRiskMode(riskMode === 'per_account' ? 'total' : 'per_account')}
+                                            className="text-xs text-blue-400 hover:text-blue-300 underline"
+                                        >
+                                            {riskMode === 'per_account' ? 'Per Account' : 'Total Group Risk'}
+                                        </button>
+                                    </label>
+                                    <div className="relative input-group">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <span className="text-slate-500">$</span>
+                                        </div>
+                                        <input 
+                                            type="number" 
+                                            value={riskAmount}
+                                            onChange={(e) => setRiskAmount(Number(e.target.value))}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 pl-8 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            placeholder="500"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-slate-500">
+                                        {riskMode === 'per_account' 
+                                            ? "I want to risk this much on EACH account." 
+                                            : "This is my total risk budget across ALL accounts."}
+                                    </p>
+                                </div>
+
+                                {/* Accounts */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-400">Number of Accounts</label>
+                                    <div className="relative input-group">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <i data-lucide="users" className="w-4 h-4 text-slate-500"></i>
+                                        </div>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            value={accountCount}
+                                            onChange={(e) => setAccountCount(Math.max(1, Number(e.target.value)))}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 pl-10 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Stop Loss */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-red-400">Stop Loss (pts)</label>
+                                        <input 
+                                            type="number" 
+                                            value={slPoints}
+                                            onChange={(e) => setSlPoints(Number(e.target.value))}
+                                            className="w-full bg-slate-900 border border-red-900/50 focus:border-red-500 rounded-lg p-3 text-white focus:ring-2 focus:ring-red-900 outline-none"
+                                        />
+                                    </div>
+
+                                    {/* Take Profit */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-emerald-400">Take Profit (pts)</label>
+                                        <input 
+                                            type="number" 
+                                            value={tpPoints}
+                                            onChange={(e) => setTpPoints(Number(e.target.value))}
+                                            className="w-full bg-slate-900 border border-emerald-900/50 focus:border-emerald-500 rounded-lg p-3 text-white focus:ring-2 focus:ring-emerald-900 outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Summary of single contract */}
+                                <div className="p-4 bg-slate-900 rounded-lg border border-slate-700 text-sm space-y-1">
+                                    <p className="text-slate-400 font-medium mb-2">Per 1 Contract ({instrument.symbol}):</p>
+                                    <div className="flex justify-between">
+                                        <span className="text-red-400">Risk: ${lossPerContract.toFixed(2)}</span>
+                                        <span className="text-emerald-400">Reward: ${gainPerContract.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* OUTPUT SECTION */}
+                            <div className="lg:col-span-2 space-y-6">
+                                
+                                {/* Main Contract Card */}
+                                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-32 bg-white opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+                                    
+                                    <h3 className="text-blue-100 font-medium text-lg mb-2">Required Position Size</h3>
+                                    
+                                    <div className="flex items-baseline space-x-2">
+                                        <span className="text-5xl md:text-7xl font-bold text-white tracking-tight">
+                                            {contractsPerAccount}
+                                        </span>
+                                        <span className="text-xl md:text-2xl text-blue-200">
+                                            Contracts
+                                        </span>
+                                    </div>
+                                    <p className="text-blue-200 mt-2">
+                                        Place this order on your <strong>Master Account</strong>.
+                                    </p>
+
+                                    {contractsPerAccount === 0 && (
+                                        <div className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center text-red-100 animate-pulse">
+                                            <i data-lucide="shield-alert" className="w-5 h-5 mr-2"></i>
+                                            <span>Risk exceeds budget! Reduce Stop Loss or Increase Risk $.</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Stats Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    
+                                    {/* Total Exposure */}
+                                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col justify-between">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Group Exposure</p>
+                                                <h4 className="text-2xl font-bold text-white mt-1">{totalContracts} Contracts</h4>
+                                            </div>
+                                            <div className="p-2 bg-purple-500/10 rounded-lg">
+                                                <i data-lucide="users" className="w-6 h-6 text-purple-400"></i>
+                                            </div>
+                                        </div>
+                                        <p className="text-sm text-slate-500">Total volume across {accountCount} accounts</p>
+                                    </div>
+
+                                    {/* Risk/Reward */}
+                                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col justify-between">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Risk / Reward</p>
+                                                <h4 className="text-2xl font-bold text-white mt-1">1 : {(gainPerContract / (lossPerContract || 1)).toFixed(2)}</h4>
+                                            </div>
+                                            <div className="p-2 bg-orange-500/10 rounded-lg">
+                                                <i data-lucide="trending-up" className="w-6 h-6 text-orange-400"></i>
+                                            </div>
+                                        </div>
+                                        <p className="text-sm text-slate-500">For every $1 risked, you make ${(gainPerContract / (lossPerContract || 1)).toFixed(2)}</p>
+                                    </div>
+
+                                </div>
+
+                                {/* Financial Impact */}
+                                <div className="bg-slate-900/50 rounded-xl border border-slate-700 overflow-hidden">
+                                    <div className="p-4 bg-slate-800 border-b border-slate-700 font-semibold text-slate-200">
+                                        Projected Outcome (Group Total)
+                                    </div>
+                                    <div className="grid grid-cols-2 divide-x divide-slate-700">
+                                        <div className="p-6 text-center group hover:bg-red-900/5 transition">
+                                            <p className="text-slate-400 text-sm mb-1">Max Loss</p>
+                                            <p className="text-2xl font-bold text-red-500">-${totalRisk.toLocaleString()}</p>
+                                            <p className="text-xs text-slate-500 mt-2">If SL is hit on all accounts</p>
+                                        </div>
+                                        <div className="p-6 text-center group hover:bg-emerald-900/5 transition">
+                                            <p className="text-slate-400 text-sm mb-1">Target Profit</p>
+                                            <p className="text-2xl font-bold text-emerald-500">+${totalGain.toLocaleString()}</p>
+                                            <p className="text-xs text-slate-500 mt-2">If TP is hit on all accounts</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="text-center">
+                                    <p className="text-xs text-slate-600">
+                                        Always verify contract specs on Tradovate. Calculations assume standard multipliers.
+                                    </p>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
